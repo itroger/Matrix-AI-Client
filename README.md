@@ -63,11 +63,11 @@ npm start
 
 `npm run dev` 会并行启动：
 - **MLX Server**：`mlx_lm.server --model mlx-community/gemma-4-e4b-it-OptiQ-4bit --port 8080`（若未安装则自动跳过）
-- **Hono 网关**：`tsx watch src/index.ts`（端口 3000）
+- **Hono 网关**：`tsx watch src/index.ts`（端口 8000）
 
 `Ctrl+C` 会同时终止两个进程。
 
-默认监听 `http://localhost:3000`，可通过 `PORT` 环境变量覆盖。
+默认监听 `http://localhost:8000`，可通过 `PORT` 环境变量覆盖。
 
 ## API 说明
 
@@ -99,7 +99,7 @@ npm start
 **示例**
 
 ```bash
-curl -N -X POST http://localhost:3000/api/chat \
+curl -N -X POST http://localhost:8000/api/chat \
   -H "Content-Type: application/json" \
   -d '{"messages":[{"role":"user","content":"当前主机内存使用情况？"}]}'
 ```
@@ -119,7 +119,7 @@ curl -N -X POST http://localhost:3000/api/chat \
 | 变量 | 必需 | 说明 |
 |---|---|---|
 | `ANTHROPIC_API_KEY` | 是 | Anthropic API 密钥 |
-| `PORT` | 否 | 服务监听端口，默认 `3000` |
+| `PORT` | 否 | 服务监听端口，默认 `8000` |
 
 ### 网关参数（`src/lib/gateway.ts`）
 

@@ -61,7 +61,7 @@ When user asks questions requiring exact system status or codebase info, call th
   }
 });
 
-const port = Number(process.env.PORT) || 3000;
+const port = Number(process.env.PORT) || 8000;
 
 serve({ fetch: app.fetch, port }, (info) => {
   console.log(`[Matrix AI Gateway] listening on http://localhost:${info.port}`);
