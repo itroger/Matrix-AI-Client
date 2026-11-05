@@ -25,6 +25,7 @@ app.post('/api/chat', async (c) => {
       messages: await convertToModelMessages(messages),
       tools: agentTools,
       stopWhen: stepCountIs(5),
+      maxOutputTokens: provider === 'local-mlx' ? 8192 : 4096,
       system: `You are an autonomous engineering assistant.
 You have access to tools for system inspection, project searching, and clock querying.
 When user asks questions requiring exact system status or codebase info, call the corresponding tools instead of guessing.`,
