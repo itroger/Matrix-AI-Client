@@ -1,7 +1,7 @@
 // src/lib/gateway.ts
 import { createOpenAI } from '@ai-sdk/openai';
 import { anthropic } from '@ai-sdk/anthropic';
-import { LanguageModelV1 } from 'ai';
+import { LanguageModel } from 'ai';
 
 // 1. 本地 MLX Client（兼容 OpenAI 协议）
 export const localMlxClient = createOpenAI({
@@ -46,7 +46,7 @@ export async function checkMlxHealth(force = false): Promise<boolean> {
  */
 export async function resolveGatewayModel(options?: {
   preferCloud?: boolean;
-}): Promise<{ model: LanguageModelV1; provider: 'local-mlx' | 'cloud-anthropic'; modelId: string }> {
+}): Promise<{ model: LanguageModel; provider: 'local-mlx' | 'cloud-anthropic'; modelId: string }> {
   // 如果调用方显式要求云端，或本地探针探测失败，直接回退到云端
   if (options?.preferCloud) {
     return {
@@ -59,7 +59,7 @@ export async function resolveGatewayModel(options?: {
   const isLocalReady = await checkMlxHealth();
   if (isLocalReady) {
     return {
-      model: localMlxClient(LOCAL_MODEL_ID),
+      model: localMlxClient.chat(LOCAL_MODEL_ID),
       provider: 'local-mlx',
       modelId: LOCAL_MODEL_ID,
     };

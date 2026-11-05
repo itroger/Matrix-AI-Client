@@ -1,7 +1,7 @@
 // src/index.ts
 import { Hono } from 'hono';
 import { serve } from '@hono/node-server';
-import { streamText, Message } from 'ai';
+import { streamText, UIMessage, stepCountIs, convertToModelMessages } from 'ai';
 import { resolveGatewayModel } from './lib/gateway';
 import { agentTools } from './lib/agent-tools';
 
@@ -10,7 +10,7 @@ const app = new Hono();
 app.post('/api/chat', async (c) => {
   try {
     const { messages, preferCloud } = await c.req.json<{
-      messages: Message[];
+      messages: UIMessage[];
       preferCloud?: boolean;
     }>();
 
@@ -22,31 +22,21 @@ app.post('/api/chat', async (c) => {
 
     const streamResult = streamText({
       model,
-      messages,
+      messages: await convertToModelMessages(messages),
       tools: agentTools,
-      maxSteps: 5,
+      stopWhen: stepCountIs(5),
       system: `You are an autonomous engineering assistant.
 You have access to tools for system inspection, project searching, and clock querying.
 When user asks questions requiring exact system status or codebase info, call the corresponding tools instead of guessing.`,
-      onStepFinish: ({ stepType, toolCalls, toolResults }) => {
-        if (toolCalls && toolCalls.length > 0) {
-          console.log(`[Agent Gateway] [${provider}] Step Type: ${stepType}`);
-          toolCalls.forEach((call) => {
-            console.log(`  -> Called tool: ${call.toolName} with args:`, call.args);
-          });
-        }
-        if (toolResults && toolResults.length > 0) {
-          toolResults.forEach((res) => {
-            console.log(`  <- Result for: ${res.toolName}:`, JSON.stringify(res.result).slice(0, 100));
-          });
-        }
+      onStepFinish: ({ stepNumber, text }) => {
+        console.log(`[Agent Gateway] [${provider}] step ${stepNumber} finished, text: ${text.slice(0, 80)}`);
       },
       onError: ({ error }) => {
         console.error(`[Stream Error] [Provider: ${provider}]:`, error);
       },
     });
 
-    return streamResult.toDataStreamResponse({
+    return streamResult.toUIMessageStreamResponse({
       headers: {
         'Cache-Control': 'no-cache, no-transform',
         'Connection': 'keep-alive',

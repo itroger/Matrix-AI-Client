@@ -38,7 +38,7 @@ export const agentTools = {
   // 1. 本地硬件监控工具（适合本地 MLX 场景）
   getLocalHostMetrics: tool({
     description: '获取当前主机的 CPU、内存占用以及系统负载状态',
-    parameters: z.object({
+    inputSchema: z.object({
       detailLevel: z.enum(['summary', 'full']).default('summary').describe('指标详细程度'),
     }),
     execute: async ({ detailLevel }) => {
@@ -61,7 +61,7 @@ export const agentTools = {
   // 2. 本地项目文档与代码检索工具
   searchProjectCodebase: tool({
     description: '检索本地项目代码或技术文档中的关键定义和引用',
-    parameters: z.object({
+    inputSchema: z.object({
       query: z.string().describe('检索关键词或符号名称'),
       fileType: z.string().optional().describe('限定文件后缀，例如 ts, py, md'),
     }),
@@ -97,7 +97,7 @@ export const agentTools = {
   // 3. 动态时间与时区校验
   getCurrentTimestamp: tool({
     description: '获取当前的 ISO 时间戳以及指定时区的时间字符串',
-    parameters: z.object({
+    inputSchema: z.object({
       timeZone: z.string().default('Asia/Shanghai').describe('IANA 时区名称，例如 Asia/Shanghai 或 UTC'),
     }),
     execute: async ({ timeZone }) => {

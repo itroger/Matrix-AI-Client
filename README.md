@@ -8,7 +8,7 @@
 - **显式覆盖**：客户端可通过 `preferCloud: true` 强制走云端（适用于高复杂度任务）
 - **探针优化**：5 秒 TTL 缓存 + 800ms 硬超时，避免高频请求击穿本地端口
 - **自主多步工具调用**：最多 5 轮"思考 → 调工具 → 观察 → 再思考"的自主迭代
-- **流式响应**：标准 Data Stream 输出，响应头注入 `X-Gateway-Provider` / `X-Gateway-Model` 便于链路追踪
+- **流式响应**：UI Message Stream 输出，响应头注入 `X-Gateway-Provider` / `X-Gateway-Model` 便于链路追踪
 - **零前端依赖**：纯后端 Hono 服务，无 React 运行时
 
 ## 技术栈
@@ -73,7 +73,7 @@ npm start
 
 ### `POST /api/chat`
 
-流式对话接口，兼容 Vercel AI SDK Data Stream 协议。
+流式对话接口，兼容 Vercel AI SDK UI Message Stream 协议。
 
 **请求体**
 
@@ -86,7 +86,7 @@ npm start
 
 **响应**
 
-- 成功：`200`，`Content-Type: text/plain; charset=utf-8`，Data Stream 格式（含工具调用状态）
+- 成功：`200`，`Content-Type: text/plain; charset=utf-8`，UI Message Stream 格式（含工具调用状态）
 - 失败：`400` / `500`，`{ "error": "..." }`
 
 **响应头（可观测性）**
