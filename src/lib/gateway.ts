@@ -1,22 +1,37 @@
 // src/lib/gateway.ts
 import { createOpenAI } from '@ai-sdk/openai';
-import { anthropic } from '@ai-sdk/anthropic';
-import { LanguageModel } from 'ai';
+import { gateway, LanguageModel } from 'ai';
 
 // 1. 本地 MLX Client（兼容 OpenAI 协议）
 export const localMlxClient = createOpenAI({
   baseURL: 'http://127.0.0.1:8080/v1',
-  apiKey: 'local-mlx', // mlx_lm.server 默认无需密码，传占位字符串即可
+  apiKey: 'local-mlx',
 });
 
 export const LOCAL_MODEL_ID = 'mlx-community/gemma-4-e4b-it-OptiQ-4bit';
-export const CLOUD_MODEL_ID = 'claude-3-5-sonnet-20241022';
+export const DEFAULT_CLOUD_MODEL = 'anthropic/claude-sonnet-5.5';
 
-// 2. 内存心跳探针状态缓存
+// 2. Vercel AI Gateway 支持的常用云端模型
+export const CLOUD_MODELS = [
+  'anthropic/claude-sonnet-5.5',
+  'anthropic/claude-opus-5.5',
+  'anthropic/claude-haiku-5.5',
+  'openai/gpt-5.2',
+  'openai/gpt-5.2-fast',
+  'openai/gpt-4o',
+  'openai/gpt-4o-mini',
+  'google/gemini-3.5-flash',
+  'google/gemini-2.5-pro',
+  'deepseek/deepseek-v4-pro',
+  'spacexai/grok-4.7',
+  'zai/glm-5.3',
+] as unknown as readonly string[];
+
+// 3. 内存心跳探针状态缓存
 let lastProbeTime = 0;
 let isLocalMlxHealthy = false;
-const PROBE_TTL_MS = 5000;       // 缓存探测结果 5 秒，避免高频请求击穿本地端口
-const PROBE_TIMEOUT_MS = 800;    // 单次探针硬超时 800ms
+const PROBE_TTL_MS = 5000;
+const PROBE_TIMEOUT_MS = 800;
 
 /**
  * 探测本地 MLX 服务健康状态
@@ -43,19 +58,48 @@ export async function checkMlxHealth(force = false): Promise<boolean> {
 
 /**
  * 动态模型决策器
+ *
+ * route 参数优先级最高：
+ * - 'local' → 强制本地 MLX
+ * - 'cloud' → 默认云端模型
+ * - 其他字符串（如 'openai/gpt-5.2'）→ 指定云端模型 ID
+ * - 不传 → 自动路由（本地优先，离线降级云端）
  */
 export async function resolveGatewayModel(options?: {
   preferCloud?: boolean;
-}): Promise<{ model: LanguageModel; provider: 'local-mlx' | 'cloud-anthropic'; modelId: string }> {
-  // 如果调用方显式要求云端，或本地探针探测失败，直接回退到云端
-  if (options?.preferCloud) {
+  cloudModel?: string;
+  route?: string;
+}): Promise<{ model: LanguageModel; provider: 'local-mlx' | 'cloud-gateway'; modelId: string }> {
+  // 1. 显式指定本地模型
+  if (options?.route === 'local') {
     return {
-      model: anthropic(CLOUD_MODEL_ID),
-      provider: 'cloud-anthropic',
-      modelId: CLOUD_MODEL_ID,
+      model: localMlxClient.chat(LOCAL_MODEL_ID),
+      provider: 'local-mlx',
+      modelId: LOCAL_MODEL_ID,
     };
   }
 
+  // 2. 显式指定云端（route === 'cloud' 或具体模型 ID）
+  if (options?.route && options.route !== 'local') {
+    const cloudModelId = options.route === 'cloud' ? DEFAULT_CLOUD_MODEL : options.route;
+    return {
+      model: gateway(cloudModelId),
+      provider: 'cloud-gateway',
+      modelId: cloudModelId,
+    };
+  }
+
+  // 3. 向后兼容：cloudModel / preferCloud
+  if (options?.cloudModel || options?.preferCloud) {
+    const cloudModelId = options.cloudModel || DEFAULT_CLOUD_MODEL;
+    return {
+      model: gateway(cloudModelId),
+      provider: 'cloud-gateway',
+      modelId: cloudModelId,
+    };
+  }
+
+  // 4. 自动路由：本地优先，离线降级云端
   const isLocalReady = await checkMlxHealth();
   if (isLocalReady) {
     return {
@@ -65,10 +109,9 @@ export async function resolveGatewayModel(options?: {
     };
   }
 
-  // 本地服务离线，静默降级
   return {
-    model: anthropic(CLOUD_MODEL_ID),
-    provider: 'cloud-anthropic',
-    modelId: CLOUD_MODEL_ID,
+    model: gateway(DEFAULT_CLOUD_MODEL),
+    provider: 'cloud-gateway',
+    modelId: DEFAULT_CLOUD_MODEL,
   };
 }

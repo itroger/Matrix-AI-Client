@@ -9,16 +9,18 @@ const app = new Hono();
 
 app.post('/api/chat', async (c) => {
   try {
-    const { messages, preferCloud } = await c.req.json<{
+    const { messages, preferCloud, cloudModel, route } = await c.req.json<{
       messages: UIMessage[];
       preferCloud?: boolean;
+      cloudModel?: string;
+      route?: string;
     }>();
 
     if (!messages || !Array.isArray(messages)) {
       return c.json({ error: 'Invalid messages array' }, 400);
     }
 
-    const { model, provider, modelId } = await resolveGatewayModel({ preferCloud });
+    const { model, provider, modelId } = await resolveGatewayModel({ preferCloud, cloudModel, route });
 
     const streamResult = streamText({
       model,

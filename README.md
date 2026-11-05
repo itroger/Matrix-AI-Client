@@ -1,11 +1,12 @@
 # Matrix AI Client
 
-混合 AI Agent 网关：以本地 MLX 为主、云端 Anthropic 为备，通过健康探针做动态路由与静默降级，并赋予 Agent 硬件监控、代码检索、时间查询三类工具，实现自主多步工程辅助能力。
+混合 AI Agent 网关：以本地 MLX 为主、Vercel AI Gateway（多云端模型）为备，通过健康探针做动态路由与静默降级，并赋予 Agent 硬件监控、代码检索、时间查询三类工具，实现自主多步工程辅助能力。
 
 ## 特性
 
-- **混合模型智能路由**：默认探测本地 MLX，健康则用本地模型（低延迟、零成本、隐私本地化）；离线时静默降级到云端 Claude
-- **显式覆盖**：客户端可通过 `preferCloud: true` 强制走云端（适用于高复杂度任务）
+- **混合模型智能路由**：默认探测本地 MLX，健康则用本地模型（低延迟、零成本、隐私本地化）；离线时静默降级到云端
+- **Vercel AI Gateway 多模型**：通过统一网关访问 Anthropic / OpenAI / Google / DeepSeek / xAI / 智谱等云端模型，无需单独集成各 provider SDK
+- **显式覆盖**：客户端可通过 `preferCloud: true` 强制走云端，或通过 `cloudModel` 指定具体云端模型
 - **探针优化**：5 秒 TTL 缓存 + 800ms 硬超时，避免高频请求击穿本地端口
 - **自主多步工具调用**：最多 5 轮"思考 → 调工具 → 观察 → 再思考"的自主迭代
 - **流式响应**：UI Message Stream 输出，响应头注入 `X-Gateway-Provider` / `X-Gateway-Model` 便于链路追踪
@@ -17,16 +18,16 @@
 |---|---|
 | 运行时 | Node.js |
 | Web 框架 | [Hono](https://hono.dev/) + `@hono/node-server` |
-| AI 编排 | [Vercel AI SDK](https://sdk.vercel.ai/docs)（`streamText` + `tool`） |
+| AI 编排 | [Vercel AI SDK](https://ai-sdk.dev/docs)（`streamText` + `tool`） |
+| 云端模型 | [Vercel AI Gateway](https://ai-sdk.dev/docs/ai-sdk-gateway)（统一访问多 provider） |
 | 参数校验 | Zod |
 | 本地模型 | MLX server（OpenAI 兼容协议，端口 8080） |
-| 云端模型 | Anthropic Claude 3.5 Sonnet |
 
 ## 前置条件
 
-- Node.js ≥ 18
+- Node.js ≥ 22
+- **Vercel AI Gateway API Key（必需）**：用于云端降级与 `preferCloud` / `cloudModel` 路径，在 [Vercel Dashboard](https://vercel.com/dashboard) 获取
 - **本地 MLX（可选）**：在 macOS 上启动 [MLX server](https://github.com/ml-explore/mlx-lm)，监听 `http://127.0.0.1:8080`，加载模型 `mlx-community/gemma-4-e4b-it-OptiQ-4bit`
-- **Anthropic API Key（必需）**：用于云端降级与 `preferCloud` 路径
 
 ### 启动本地 MLX 服务
 
@@ -38,7 +39,7 @@ pip install mlx-lm
 mlx_lm.server --model mlx-community/gemma-4-e4b-it-OptiQ-4bit --port 8080
 ```
 
-启动后网关会自动探测并路由到本地模型；若未启动，则静默降级到云端 Claude。
+启动后网关会自动探测并路由到本地模型；若未启动，则静默降级到云端。
 
 ## 快速开始
 
@@ -48,7 +49,7 @@ npm install
 
 # 2. 配置环境变量
 cp .env.example .env
-# 编辑 .env，填入 ANTHROPIC_API_KEY
+# 编辑 .env，填入 AI_GATEWAY_API_KEY
 
 # 3. 开发模式（同时启动 MLX Server 与 Hono 网关，热重载）
 npm run dev
@@ -79,10 +80,21 @@ npm start
 
 ```jsonc
 {
-  "messages": [/* AI SDK Message 数组 */],
-  "preferCloud": false  // 可选，true 时强制走云端 Claude
+  "messages": [/* UIMessage 数组 */],
+  "route": "local"  // 可选，模型路由控制（见下）
 }
 ```
+
+**`route` 参数**（优先级最高，指定使用的模型）
+
+| 值 | 说明 |
+|---|---|
+| 不传 | 自动路由：本地 MLX 优先，离线降级到云端 |
+| `"local"` | 强制使用本地 MLX 模型 |
+| `"cloud"` | 使用默认云端模型（`anthropic/claude-sonnet-5.5`） |
+| `"openai/gpt-5.2"` | 指定具体云端模型 ID（见下表） |
+
+> 向后兼容：`preferCloud: true` 等价于 `route: "cloud"`；`cloudModel: "openai/gpt-5.2"` 等价于 `route: "openai/gpt-5.2"`。
 
 **响应**
 
@@ -93,15 +105,50 @@ npm start
 
 | Header | 说明 |
 |---|---|
-| `X-Gateway-Provider` | `local-mlx` 或 `cloud-anthropic` |
+| `X-Gateway-Provider` | `local-mlx` 或 `cloud-gateway` |
 | `X-Gateway-Model` | 实际使用的模型 ID |
+
+### 支持的云端模型
+
+通过 `route` 参数指定云端模型 ID，默认 `anthropic/claude-sonnet-5.5`：
+
+| 模型 ID | 说明 |
+|---|---|
+| `anthropic/claude-sonnet-5.5` | Claude Sonnet 5.5（默认） |
+| `anthropic/claude-opus-5.5` | Claude Opus 5.5 |
+| `anthropic/claude-haiku-5.5` | Claude Haiku 5.5 |
+| `openai/gpt-5.2` | GPT-5.2 |
+| `openai/gpt-5.2-fast` | GPT-5.2 Fast |
+| `openai/gpt-4o` | GPT-4o |
+| `openai/gpt-4o-mini` | GPT-4o Mini |
+| `google/gemini-3.5-flash` | Gemini 3.5 Flash |
+| `google/gemini-2.5-pro` | Gemini 2.5 Pro |
+| `deepseek/deepseek-v4-pro` | DeepSeek V4 Pro |
+| `spacexai/grok-4.7` | Grok 4.7 |
+| `zai/glm-5.3` | 智谱 GLM-5.3 |
 
 **示例**
 
 ```bash
+# 自动路由（本地 MLX 优先，离线降级云端）
 curl -N -X POST http://localhost:8000/api/chat \
   -H "Content-Type: application/json" \
   -d '{"messages":[{"role":"user","content":"当前主机内存使用情况？"}]}'
+
+# 强制使用本地 MLX
+curl -N -X POST http://localhost:8000/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{"messages":[{"role":"user","content":"hi"}],"route":"local"}'
+
+# 强制使用云端默认模型
+curl -N -X POST http://localhost:8000/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{"messages":[{"role":"user","content":"hi"}],"route":"cloud"}'
+
+# 指定云端模型
+curl -N -X POST http://localhost:8000/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{"messages":[{"role":"user","content":"hi"}],"route":"openai/gpt-5.2"}'
 ```
 
 ## 内置工具
@@ -118,7 +165,7 @@ curl -N -X POST http://localhost:8000/api/chat \
 
 | 变量 | 必需 | 说明 |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | 是 | Anthropic API 密钥 |
+| `AI_GATEWAY_API_KEY` | 是 | Vercel AI Gateway API 密钥 |
 | `PORT` | 否 | 服务监听端口，默认 `8000` |
 
 ### 网关参数（`src/lib/gateway.ts`）
@@ -126,7 +173,8 @@ curl -N -X POST http://localhost:8000/api/chat \
 | 常量 | 默认值 | 说明 |
 |---|---|---|
 | `LOCAL_MODEL_ID` | `mlx-community/gemma-4-e4b-it-OptiQ-4bit` | 本地模型 ID |
-| `CLOUD_MODEL_ID` | `claude-3-5-sonnet-20241022` | 云端模型 ID |
+| `DEFAULT_CLOUD_MODEL` | `anthropic/claude-sonnet-5.5` | 默认云端模型 ID |
+| `CLOUD_MODELS` | 见上表 | 支持的云端模型列表 |
 | `PROBE_TTL_MS` | `5000` | 探针结果缓存时长 |
 | `PROBE_TIMEOUT_MS` | `800` | 单次探针硬超时 |
 
@@ -136,7 +184,7 @@ curl -N -X POST http://localhost:8000/api/chat \
 src/
 ├── index.ts            # Hono 入口，POST /api/chat
 └── lib/
-    ├── gateway.ts      # 本地 MLX ↔ 云端 Anthropic 路由决策
+    ├── gateway.ts      # 本地 MLX ↔ Vercel AI Gateway 路由决策
     └── agent-tools.ts  # Agent 工具集（硬件/检索/时间）
 ```
 
@@ -144,7 +192,8 @@ src/
 
 | 命令 | 说明 |
 |---|---|
-| `npm run dev` | 开发模式，tsx 热重载 |
+| `npm run dev` | 开发模式，并行启动 MLX Server + Hono（热重载） |
+| `npm run dev:web` | 仅启动 Hono 网关（热重载） |
 | `npm run build` | TypeScript 编译到 `dist/` |
 | `npm start` | 运行构建产物 |
 | `npm run typecheck` | 类型检查（不输出文件） |
@@ -154,12 +203,16 @@ src/
 ```
 请求到达
   │
-  ├─ preferCloud=true ? ──是──→ 云端 Claude
+  ├─ route="local" ? ──是──→ 本地 MLX（gemma-4-e4b-it-OptiQ-4bit）
   │
-  └─ 否 → 探测本地 MLX (5s 缓存 / 800ms 超时)
-            │
-            ├─ 健康 → 本地 gemma-4-e4b-it-OptiQ-4bit
-            └─ 离线 → 静默降级到云端 Claude
+  ├─ route="cloud" ? ──是──→ Vercel AI Gateway（默认云端模型）
+  │
+  ├─ route="<model-id>" ? ──是──→ Vercel AI Gateway（指定模型）
+  │
+  └─ route 未传 → 探测本地 MLX (5s 缓存 / 800ms 超时)
+                    │
+                    ├─ 健康 → 本地 gemma-4-e4b-it-OptiQ-4bit
+                    └─ 离线 → 静默降级到 Vercel AI Gateway
 ```
 
 ## License
