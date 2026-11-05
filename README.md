@@ -50,13 +50,22 @@ npm install
 cp .env.example .env
 # 编辑 .env，填入 ANTHROPIC_API_KEY
 
-# 3. 开发模式（热重载）
+# 3. 开发模式（同时启动 MLX Server 与 Hono 网关，热重载）
 npm run dev
+
+# 仅启动 Hono 网关（不启动本地 MLX，自动降级到云端）
+npm run dev:web
 
 # 或构建后启动
 npm run build
 npm start
 ```
+
+`npm run dev` 会并行启动：
+- **MLX Server**：`mlx_lm.server --model mlx-community/gemma-4-e4b-it-OptiQ-4bit --port 8080`（若未安装则自动跳过）
+- **Hono 网关**：`tsx watch src/index.ts`（端口 3000）
+
+`Ctrl+C` 会同时终止两个进程。
 
 默认监听 `http://localhost:3000`，可通过 `PORT` 环境变量覆盖。
 

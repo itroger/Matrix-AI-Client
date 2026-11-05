@@ -16,7 +16,8 @@
   "type": "module",
   "main": "dist/index.js",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
+    "dev": "trap 'kill 0' EXIT; command -v mlx_lm.server >/dev/null 2>&1 && mlx_lm.server --model mlx-community/gemma-4-e4b-it-OptiQ-4bit --port 8080 & tsx watch src/index.ts & wait",
+    "dev:web": "tsx watch src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
