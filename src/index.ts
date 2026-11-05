@@ -5,6 +5,8 @@ import { streamText, UIMessage, stepCountIs, convertToModelMessages } from 'ai';
 import { resolveGatewayModel } from './lib/gateway';
 import { agentTools } from './lib/agent-tools';
 
+try { process.loadEnvFile(); } catch {}
+
 const app = new Hono();
 
 app.post('/api/chat', async (c) => {

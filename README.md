@@ -47,9 +47,8 @@ mlx_lm.server --model mlx-community/gemma-4-e4b-it-OptiQ-4bit --port 8080
 # 1. 安装依赖
 npm install
 
-# 2. 配置环境变量
-cp .env.example .env
-# 编辑 .env，填入 AI_GATEWAY_API_KEY
+# 2. 配置环境变量（创建 .env，填入 AI_GATEWAY_API_KEY）
+echo "AI_GATEWAY_API_KEY=your_key_here" > .env
 
 # 3. 开发模式（同时启动 MLX Server 与 Hono 网关，热重载）
 npm run dev
