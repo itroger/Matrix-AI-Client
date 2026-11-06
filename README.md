@@ -1,6 +1,6 @@
 # Matrix AI Client
 
-混合 AI Agent 网关：以本地 MLX 为主、Vercel AI Gateway（多云端模型）为备，通过健康探针做动态路由与静默降级，并赋予 Agent 硬件监控、代码检索、时间查询三类工具，实现自主多步工程辅助能力。
+混合 AI Agent 网关：以本地 MLX 为主、Vercel AI Gateway（多云端模型）为备，通过健康探针做动态路由与静默降级，并赋予 Agent 硬件监控、代码检索、时间查询三类内置工具与基于 MCP 的 Google 搜索工具，实现自主多步工程辅助能力。
 
 ## 特性
 
@@ -9,6 +9,7 @@
 - **显式覆盖**：客户端可通过 `preferCloud: true` 强制走云端，或通过 `cloudModel` 指定具体云端模型
 - **探针优化**：5 秒 TTL 缓存 + 800ms 硬超时，避免高频请求击穿本地端口
 - **自主多步工具调用**：最多 5 轮"思考 → 调工具 → 观察 → 再思考"的自主迭代
+- **MCP 工具集成**：`googleSearch` 通过 MCP（Streamable HTTP）挂载到网关 `/mcp` 路由（同进程同端口），网关用 `@ai-sdk/mcp` client 自连接注入，未配置时自动降级跳过
 - **流式响应**：UI Message Stream 输出，响应头注入 `X-Gateway-Provider` / `X-Gateway-Model` 便于链路追踪
 - **零前端依赖**：纯后端 Hono 服务，无 React 运行时
 
@@ -21,6 +22,7 @@
 | AI 编排 | [Vercel AI SDK](https://ai-sdk.dev/docs)（`streamText` + `tool`） |
 | 云端模型 | [Vercel AI Gateway](https://ai-sdk.dev/docs/ai-sdk-gateway)（统一访问多 provider） |
 | 参数校验 | Zod |
+| MCP | [Model Context Protocol SDK](https://modelcontextprotocol.io)（Streamable HTTP，挂载于 `/mcp`）+ [`@ai-sdk/mcp`](https://ai-sdk.dev/docs/ai-sdk-core/mcp-tools) client |
 | 本地模型 | MLX server（OpenAI 兼容协议，端口 8080） |
 
 ## 前置条件
@@ -63,9 +65,9 @@ npm start
 
 `npm run dev` 会并行启动：
 - **MLX Server**：`mlx_lm.server --model mlx-community/gemma-4-e4b-it-OptiQ-4bit --port 8080`（若未安装则自动跳过）
-- **Hono 网关**：`tsx watch src/index.ts`（端口 8000）
+- **Hono 网关**：`tsx watch src/index.ts`（端口 8000，含 `/mcp` MCP 端点）
 
-`Ctrl+C` 会同时终止两个进程。
+`Ctrl+C` 会同时终止所有进程。
 
 默认监听 `http://localhost:8000`，可通过 `PORT` 环境变量覆盖。
 
@@ -157,6 +159,9 @@ curl -N -X POST http://localhost:8000/api/chat \
 | `getLocalHostMetrics` | CPU / 内存 / 系统负载监控 | 真实（`node:os`） |
 | `searchProjectCodebase` | 递归检索项目代码/文档，按关键词匹配文件内容 | 真实（`node:fs/promises`，最多 10 条命中） |
 | `getCurrentTimestamp` | ISO 时间戳 + 指定时区格式化 | 真实（`Intl.DateTimeFormat`） |
+| `googleSearch` | Google 搜索，返回标题/链接/摘要 | MCP（Streamable HTTP，挂载于 `/mcp`，Google Custom Search API，需配置 `GOOGLE_API_KEY` + `GOOGLE_CX`） |
+
+> `googleSearch` 通过 MCP（Streamable HTTP）挂载到网关 `/mcp` 路由（`src/lib/mcp-server.ts`，同进程同端口），网关启动时用 `@ai-sdk/mcp` client 自连接注入。MCP 不可用时网关自动跳过该工具，其余工具不受影响。
 
 ## 配置
 
@@ -165,6 +170,9 @@ curl -N -X POST http://localhost:8000/api/chat \
 | 变量 | 必需 | 说明 |
 |---|---|---|
 | `AI_GATEWAY_API_KEY` | 是 | Vercel AI Gateway API 密钥 |
+| `GOOGLE_API_KEY` | 否 | Google Custom Search API 密钥（启用 `googleSearch` 工具时必需） |
+| `GOOGLE_CX` | 否 | Google 自定义搜索引擎 ID（启用 `googleSearch` 工具时必需） |
+| `MCP_GOOGLE_SEARCH_URL` | 否 | MCP 端点地址，默认 `http://localhost:${PORT}/mcp` |
 | `PORT` | 否 | 服务监听端口，默认 `8000` |
 
 ### 网关参数（`src/lib/gateway.ts`）
@@ -181,18 +189,20 @@ curl -N -X POST http://localhost:8000/api/chat \
 
 ```
 src/
-├── index.ts            # Hono 入口，POST /api/chat
+├── index.ts            # Hono 入口，POST /api/chat + /mcp MCP 端点
 └── lib/
     ├── gateway.ts      # 本地 MLX ↔ Vercel AI Gateway 路由决策
-    └── agent-tools.ts  # Agent 工具集（硬件/检索/时间）
+    ├── agent-tools.ts  # 内置 Agent 工具集（硬件/检索/时间）
+    ├── mcp-server.ts   # googleSearch MCP server（Streamable HTTP，挂载于 /mcp）
+    └── mcp-tools.ts    # MCP client：自连接 /mcp 注入工具
 ```
 
 ## 脚本
 
 | 命令 | 说明 |
 |---|---|
-| `npm run dev` | 开发模式，并行启动 MLX Server + Hono（热重载） |
-| `npm run dev:web` | 仅启动 Hono 网关（热重载） |
+| `npm run dev` | 开发模式，并行启动 MLX Server + Hono 网关（热重载） |
+| `npm run dev:web` | 仅启动 Hono 网关（热重载，不启动 MLX） |
 | `npm run build` | TypeScript 编译到 `dist/` |
 | `npm start` | 运行构建产物 |
 | `npm run typecheck` | 类型检查（不输出文件） |
