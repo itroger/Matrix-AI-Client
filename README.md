@@ -1,6 +1,6 @@
 # Matrix AI Client
 
-混合 AI Agent 网关：以本地 MLX 为主、Vercel AI Gateway（多云端模型）为备，通过健康探针做动态路由与静默降级，并赋予 Agent 基于 MCP 的文件系统工具（读写/搜索/目录树等 16 个），实现自主多步工程辅助能力。
+混合 AI Agent 网关：以本地 MLX 为主、Vercel AI Gateway（多云端模型）为备，通过健康探针做动态路由与静默降级，并赋予 Agent 基于 MCP 的文件系统工具（读写/搜索/目录树等 16 个）与 Apple container 沙箱工具（Orchard 可视化管理），实现自主多步工程辅助能力。
 
 ## 特性
 
@@ -10,6 +10,7 @@
 - **探针优化**：5 秒 TTL 缓存 + 800ms 硬超时，避免高频请求击穿本地端口
 - **自主多步工具调用**：最多 5 轮"思考 → 调工具 → 观察 → 再思考"的自主迭代
 - **Filesystem MCP**：通过 stdio 启动官方 `@modelcontextprotocol/server-filesystem`，提供读写/搜索/目录树等 16 个文件系统工具；允许目录由 `MCP_FS_ROOTS` 控制（默认 home），默认挂载
+- **Orchard 沙箱**：通过 Apple `container` CLI 创建/管理沙箱容器（打 `com.orchard.sandbox=true` 标签），[Orchard](https://github.com/andrew-waters/orchard) GUI 自动识别可视化管理；提供 `runInSandbox` / `listSandboxes` / `stopSandbox` 三个内联工具，默认挂载
 - **流式响应**：UI Message Stream 输出，响应头注入 `X-Gateway-Provider` / `X-Gateway-Model` 便于链路追踪
 - **零前端依赖**：纯后端 Hono 服务，无 React 运行时
 
@@ -29,6 +30,7 @@
 - Node.js ≥ 22
 - **Vercel AI Gateway API Key（必需）**：用于云端降级与 `preferCloud` / `cloudModel` 路径，在 [Vercel Dashboard](https://vercel.com/dashboard) 获取
 - **本地 MLX（可选）**：在 macOS 上启动 [MLX server](https://github.com/ml-explore/mlx-lm)，监听 `http://127.0.0.1:8080`，加载模型 `mlx-community/gemma-4-e4b-it-OptiQ-4bit`
+- **Apple container CLI + Orchard（可选）**：沙箱工具需要 [Apple container](https://github.com/apple/container) 1.6.1+ 和 [Orchard](https://github.com/andrew-waters/orchard) GUI（`brew install orchard`）；运行前需 `container system start`
 
 ### 启动本地 MLX 服务
 
@@ -164,6 +166,18 @@ curl -N -X POST http://localhost:8000/api/chat \
 
 允许访问的根目录由 `MCP_FS_ROOTS` 环境变量控制（逗号分隔，默认 home）。MCP server 不可用时网关自动跳过工具。
 
+### Orchard 沙箱工具
+
+通过 Apple `container` CLI 创建/管理沙箱容器，容器打 `com.orchard.sandbox=true` 标签后 [Orchard](https://github.com/andrew-waters/orchard) GUI 自动识别为沙箱可视化管理。默认挂载 3 个内联工具：
+
+| 工具 | 功能 |
+|---|---|
+| `runInSandbox` | 在沙箱容器里执行命令（创建+运行+返回输出），支持 image/command/name/cpus/memory/detach/workdir/timeout |
+| `listSandboxes` | 列出所有 Orchard 沙箱容器（按标签过滤） |
+| `stopSandbox` | 停止/删除沙箱容器 |
+
+运行前需确保 Apple container 系统已启动（`container system start`）。
+
 ## 配置
 
 ### 环境变量
@@ -191,7 +205,8 @@ src/
 ├── index.ts            # Hono 入口，POST /api/chat
 └── lib/
     ├── gateway.ts      # 本地 MLX ↔ Vercel AI Gateway 路由决策
-    └── mcp-tools.ts    # MCP client：stdio 启动 filesystem server 注入工具
+    ├── mcp-tools.ts    # MCP client：stdio 启动 filesystem server 注入工具
+    └── sandbox-tools.ts # Orchard 沙箱工具：container CLI 创建/管理沙箱
 ```
 
 ## 脚本

@@ -4,6 +4,7 @@ import { serve } from '@hono/node-server';
 import { streamText, UIMessage, stepCountIs, convertToModelMessages } from 'ai';
 import { resolveGatewayModel } from './lib/gateway';
 import { loadFilesystemMcpTools } from './lib/mcp-tools';
+import { sandboxTools } from './lib/sandbox-tools';
 
 try { process.loadEnvFile(); } catch {}
 
@@ -30,7 +31,7 @@ app.post('/api/chat', async (c) => {
     const streamResult = streamText({
       model,
       messages: await convertToModelMessages(messages),
-      tools: filesystemTools as Record<string, never>,
+      tools: { ...filesystemTools, ...sandboxTools } as typeof sandboxTools,
       stopWhen: stepCountIs(5),
       maxOutputTokens: provider === 'local-mlx' ? 8192 : 4096,
       system: `You are an autonomous engineering assistant with filesystem tools.`,
