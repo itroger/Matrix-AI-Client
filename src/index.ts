@@ -4,7 +4,7 @@ import { serve } from '@hono/node-server';
 import { streamText, UIMessage, stepCountIs, convertToModelMessages } from 'ai';
 import { resolveGatewayModel } from './lib/gateway';
 import { agentTools } from './lib/agent-tools';
-import { loadMcpTools } from './lib/mcp-tools';
+import { loadMcpTools, loadFilesystemMcpTools } from './lib/mcp-tools';
 import { mcpHandler } from './lib/mcp-server';
 import { ProxyAgent, setGlobalDispatcher } from 'undici';
 
@@ -17,6 +17,8 @@ if (proxyUrl) {
 }
 
 let mcpTools: Record<string, unknown> = {};
+let filesystemTools: Record<string, unknown> = {};
+let closeFilesystem: () => Promise<void> = () => Promise.resolve();
 
 const app = new Hono();
 
@@ -40,7 +42,7 @@ app.post('/api/chat', async (c) => {
     const streamResult = streamText({
       model,
       messages: await convertToModelMessages(messages),
-      tools: { ...agentTools, ...mcpTools } as typeof agentTools,
+      tools: { ...agentTools, ...mcpTools, ...filesystemTools } as typeof agentTools,
       stopWhen: stepCountIs(5),
       maxOutputTokens: provider === 'local-mlx' ? 8192 : 4096,
       system: `You are an autonomous engineering assistant.
@@ -75,6 +77,9 @@ serve({ fetch: app.fetch, port }, async (info) => {
   console.log(`[Matrix AI Gateway] listening on http://localhost:${info.port}`);
   const mcp = await loadMcpTools();
   mcpTools = mcp.tools;
-  process.on('SIGTERM', () => { mcp.close().finally(() => process.exit(0)); });
-  process.on('SIGINT', () => { mcp.close().finally(() => process.exit(0)); });
+  const fs = await loadFilesystemMcpTools();
+  filesystemTools = fs.tools;
+  closeFilesystem = fs.close;
+  process.on('SIGTERM', () => { Promise.all([mcp.close(), closeFilesystem()]).finally(() => process.exit(0)); });
+  process.on('SIGINT', () => { Promise.all([mcp.close(), closeFilesystem()]).finally(() => process.exit(0)); });
 });

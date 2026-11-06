@@ -10,6 +10,7 @@
 - **探针优化**：5 秒 TTL 缓存 + 800ms 硬超时，避免高频请求击穿本地端口
 - **自主多步工具调用**：最多 5 轮"思考 → 调工具 → 观察 → 再思考"的自主迭代
 - **MCP 工具集成**：`googleSearch` 通过 MCP（Streamable HTTP）挂载到网关 `/mcp` 路由（同进程同端口），网关用 `@ai-sdk/mcp` client 自连接注入，未配置时自动降级跳过
+- **Filesystem MCP**：通过 stdio 启动官方 `@modelcontextprotocol/server-filesystem`，提供读写/搜索/目录树等 16 个文件系统工具；允许目录由 `MCP_FS_ROOTS` 控制（默认 home），默认挂载
 - **流式响应**：UI Message Stream 输出，响应头注入 `X-Gateway-Provider` / `X-Gateway-Model` 便于链路追踪
 - **零前端依赖**：纯后端 Hono 服务，无 React 运行时
 
@@ -160,6 +161,7 @@ curl -N -X POST http://localhost:8000/api/chat \
 | `searchProjectCodebase` | 递归检索项目代码/文档，按关键词匹配文件内容 | 真实（`node:fs/promises`，最多 10 条命中） |
 | `getCurrentTimestamp` | ISO 时间戳 + 指定时区格式化 | 真实（`Intl.DateTimeFormat`） |
 | `googleSearch` | Google 搜索，返回标题/链接/摘要 | MCP（Streamable HTTP，挂载于 `/mcp`，Google Custom Search API，需配置 `GOOGLE_API_KEY` + `GOOGLE_CX`） |
+| `read_file` / `read_text_file` / `read_multiple_files` 等 | 文件读写/搜索/目录树等 16 个工具 | MCP（stdio，`@modelcontextprotocol/server-filesystem`，默认挂载） |
 
 > `googleSearch` 通过 MCP（Streamable HTTP）挂载到网关 `/mcp` 路由（`src/lib/mcp-server.ts`，同进程同端口），网关启动时用 `@ai-sdk/mcp` client 自连接注入。MCP 不可用时网关自动跳过该工具，其余工具不受影响。
 
@@ -173,6 +175,7 @@ curl -N -X POST http://localhost:8000/api/chat \
 | `GOOGLE_API_KEY` | 否 | Google Custom Search API 密钥（启用 `googleSearch` 工具时必需） |
 | `GOOGLE_CX` | 否 | Google 自定义搜索引擎 ID（启用 `googleSearch` 工具时必需） |
 | `MCP_GOOGLE_SEARCH_URL` | 否 | MCP 端点地址，默认 `http://localhost:${PORT}/mcp` |
+| `MCP_FS_ROOTS` | 否 | Filesystem MCP 允许访问的根目录（逗号分隔，默认 home） |
 | `PORT` | 否 | 服务监听端口，默认 `8000` |
 
 ### 网关参数（`src/lib/gateway.ts`）
@@ -194,7 +197,7 @@ src/
     ├── gateway.ts      # 本地 MLX ↔ Vercel AI Gateway 路由决策
     ├── agent-tools.ts  # 内置 Agent 工具集（硬件/检索/时间）
     ├── mcp-server.ts   # googleSearch MCP server（Streamable HTTP，挂载于 /mcp）
-    └── mcp-tools.ts    # MCP client：自连接 /mcp 注入工具
+    └── mcp-tools.ts    # MCP client：自连接 /mcp 注入工具 + stdio 启动 filesystem server
 ```
 
 ## 脚本
