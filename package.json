@@ -2,7 +2,7 @@
   "name": "matrix-ai-client",
   "version": "1.0.0",
   "private": true,
-  "description": "混合 AI Agent 网关：本地 MLX ↔ 云端 Anthropic 动态路由",
+  "description": "混合 AI Agent 网关：本地 MLX ↔ 云端 Vercel AI Gateway 动态路由（Vercel Eve 框架）",
   "homepage": "https://github.com/itroger/Matrix-AI-Client#readme",
   "bugs": {
     "url": "https://github.com/itroger/Matrix-AI-Client/issues"
@@ -14,27 +14,21 @@
   "license": "ISC",
   "author": "",
   "type": "module",
-  "main": "dist/index.js",
   "scripts": {
-    "dev": "trap 'kill 0' EXIT; command -v mlx_lm.server >/dev/null 2>&1 && mlx_lm.server --model mlx-community/gemma-4-e4b-it-OptiQ-4bit --port 8080 & tsx watch src/index.ts & wait",
-    "dev:web": "tsx watch src/index.ts",
-    "build": "tsc",
-    "start": "node dist/index.js",
+    "dev": "eve dev",
+    "build": "eve build",
+    "deploy": "eve deploy",
     "typecheck": "tsc --noEmit",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
-    "@ai-sdk/mcp": "^2.0.91",
-    "@ai-sdk/openai": "^4.0.109",
-    "@hono/node-server": "^2.1.6",
-    "@modelcontextprotocol/server-filesystem": "^2.2.0",
+    "@ai-sdk/openai-compatible": "^3.0.87",
     "ai": "^7.0.163",
-    "hono": "^4.13.16",
+    "eve": "^1.0.0-rc.6",
     "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",
-    "tsx": "^4.23.15",
     "typescript": "^7.0.2"
   }
 }

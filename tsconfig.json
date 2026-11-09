@@ -10,13 +10,10 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "types": ["node"],
-    "outDir": "dist",
-    "rootDir": "src",
-    "declaration": false,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src/**/*.ts"],
+  "include": ["agent/**/*.ts"],
   "exclude": ["node_modules", "dist"]
 }
